@@ -1,4 +1,4 @@
-#Fine tuning
+#Fine tuning using prompts
 
 import requests
 URL="http://localhost:11434/api/generate"
