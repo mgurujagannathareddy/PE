@@ -1,90 +1,67 @@
-
-# Prompt Optimization / Comparison
-
 import requests
+from sklearn.metrics import accuracy_score
 
 URL = "http://localhost:11434/api/generate"
-MODEL = "llama3.2:1b"
 
-
-def generate(prompt):
-    data = {
-        "model": MODEL,
-        "prompt": prompt,
-        "stream": False,
-        "options": {
-            "temperature": 0,
-            "num_predict": 100
-        }
-    }
-
-    response = requests.post(URL, json=data, timeout=120)
-    response.raise_for_status()
-    return response.json()["response"].strip()
-
-
-# Candidate prompts
 prompts = {
-    "A": (
-        "Classify the sentiment of this review:\n"
-        "{review}"
-    ),
-    "B": (
-        "Classify this review as Positive, Negative, or Neutral. "
-        "Return only one label.\n"
-        "Review: {review}"
-    ),
+    "A": "Classify this review:\n{review}",
+    "B": "Classify as Positive, Negative, or Neutral. Return only one label:\n{review}",
     "C": (
-        "Classify the review as Positive if it expresses satisfaction, "
-        "Negative if it expresses dissatisfaction, or Neutral if it "
-        "expresses neither. Return exactly one label.\n"
-        "Review: {review}"
+        "Positive means satisfaction, Negative means dissatisfaction, "
+        "Neutral means neither. Return only one label:\n{review}"
     )
 }
 
-
-# Mobile product reviews with expected labels
 reviews = [
-    {
-        "review": "The battery lasts all day and the camera is excellent.",
-        "expected": "positive"
-    },
-    {
-        "review": "The phone heats up and the battery drains quickly.",
-        "expected": "negative"
-    },
-    {
-        "review": "The phone comes with a 6.5-inch display.",
-        "expected": "neutral"
-    }
+    ("Amazing phone and excellent camera", "positive"),
+    ("Terrible battery life", "negative"),
+    ("The phone has 128 GB storage", "neutral"),
+    ("I love this phone", "positive"),
+    ("Very poor quality", "negative"),
+    ("The phone comes in black", "neutral")
 ]
 
 
-# Test each prompt against the same reviews
-for ty, template in prompts.items():
-    print(f"\nPrompt {ty}")
-    print("=" * 60)
+def generate(prompt):
+    response = requests.post(URL, json={
+        "model": "llama3.2:1b",
+        "prompt": prompt,
+        "stream": False,
+        "options": {"temperature": 0}
+    })
+    response.raise_for_status()
+    return response.json()["response"].strip().lower()
 
-    correct = 0
 
-    for item in reviews:
-        review = item["review"]
-        expected = item["expected"]
+results = {}
 
-        # Replace the placeholder with the actual review
-        prompt = template.format(review=review)
+for name, template in prompts.items():
+    y_true = []
+    y_pred = []
 
-        answer = generate(prompt)
-        normalized = answer.strip().lower().rstrip(".")
+    for review, expected in reviews:
+        answer = generate(template.format(review=review))
 
-        print(f"\nReview: {review}")
-        print(f"Expected: {expected}")
-        print(f"Predicted: {answer}")
+        prediction = next(
+            (label for label in ["positive", "negative", "neutral"]
+             if label in answer.split()),
+            "invalid"
+        )
 
-        # Simple exact-label evaluation
-        # print("============>..........." + normalized)
-        if normalized == expected:
-            correct += 1
+        print(expected)
+        print("="*200)
+        print(prediction)
 
-    accuracy = correct / len(reviews) * 100
-    print(f"\nAccuracy: {correct}/{len(reviews)} = {accuracy:.1f}%")
+        y_true.append(expected)
+        y_pred.append(prediction)
+
+    accuracy = accuracy_score(y_true, y_pred)
+    results[name] = accuracy
+    print(name, "Accuracy:", round(accuracy, 3))
+
+
+best = max(results, key=results.get)
+
+print("\nBest prompt:", best)
+print("Best accuracy:", round(results[best], 3))
+print(prompts[best])
