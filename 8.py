@@ -46,7 +46,7 @@ for name, template in prompts.items():
         )
 
         y_true.append(expected)
-        y_pred.append(prediction)
+        y_pred.append(prediction.lower())
 
     print(f"\nPrompt {name}")
     print("=" * 35)
