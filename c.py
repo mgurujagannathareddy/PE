@@ -30,7 +30,7 @@ source .venv/bin/activate
 
 8. Install Ollama and Requests Python libraries
 
-python -m pip install ollama requests
+python -m pip install ollama requests scikit-learn
 
 9. Deactivate the virtual environment
 
