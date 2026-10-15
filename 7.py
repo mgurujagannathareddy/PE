@@ -48,10 +48,6 @@ for name, template in prompts.items():
             "invalid"
         )
 
-        print(expected)
-        print("="*200)
-        print(prediction)
-
         y_true.append(expected)
         y_pred.append(prediction)
 
