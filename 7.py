@@ -1,63 +1,56 @@
 import requests
-from sklearn.metrics import accuracy_score
 
 URL = "http://localhost:11434/api/generate"
 
-prompts = {
-    "A": "Classify this review:\n{review}",
-    "B": "Classify as Positive, Negative, or Neutral. Return only one label:\n{review}",
-    "C": (
-        "Positive means satisfaction, Negative means dissatisfaction, "
-        "Neutral means neither. Return only one label:\n{review}"
-    )
-}
-
-reviews = [
-    ("Amazing phone and excellent camera", "positive"),
-    ("Terrible battery life", "negative"),
-    ("The phone has 128 GB storage", "neutral"),
-    ("I love this phone", "positive"),
-    ("Very poor quality", "negative"),
-    ("The phone comes in black", "neutral")
-]
-
-
 def generate(prompt):
-    response = requests.post(URL, json={
+    r = requests.post(URL, json={
         "model": "llama3.2:1b",
         "prompt": prompt,
         "stream": False,
         "options": {"temperature": 0}
-    })
-    response.raise_for_status()
-    return response.json()["response"].strip().lower()
+    }, timeout=300)
+
+    r.raise_for_status()
+    return r.json()["response"].strip()
 
 
-results = {}
+try:
+    n = int(input("Enter number of prompts: "))
+    results = {}
 
-for name, template in prompts.items():
-    y_true = []
-    y_pred = []
+    for i in range(n):
+        prompt = input(f"\nEnter Prompt {i+1}: ")
+        answer = generate(prompt)
 
-    for review, expected in reviews:
-        answer = generate(template.format(review=review))
+        print("\nRESPONSE:")
+        print(answer)
 
-        prediction = next(
-            (label for label in ["positive", "negative", "neutral"]
-             if label in answer.split()),
-            "invalid"
-        )
+        print("\nRESPONSE EVALUATION")
+        print("=" * 65)
+        print("Give a score from 1 to 5 for each criterion.")
 
-        y_true.append(expected)
-        y_pred.append(prediction)
+        relevance = int(input("Relevance (1-5): "))
+        accuracy = int(input("Accuracy (1-5): "))
+        clarity = int(input("Clarity (1-5): "))
+        instruction = int(input("Instruction Following (1-5): "))
 
-    accuracy = accuracy_score(y_true, y_pred)
-    results[name] = accuracy
-    print(name, "Accuracy:", round(accuracy, 3))
+        total = relevance + accuracy + clarity + instruction
 
+        print("\nTotal Score:", total, "/ 20")
+        results[prompt] = total
 
-best = max(results, key=results.get)
+    best = max(results, key=results.get)
 
-print("\nBest prompt:", best)
-print("Best accuracy:", round(results[best], 3))
-print(prompts[best])
+    print("\nOPTIMAL PROMPT")
+    print("=" * 65)
+    print("Best Prompt:", best)
+    print("Best Score:", results[best], "/ 20")
+
+except requests.exceptions.ConnectionError:
+    print("Error: Could not connect to Ollama. Make sure Ollama is running.")
+
+except requests.exceptions.Timeout:
+    print("Error: Model took too long to respond.")
+
+except Exception as error:
+    print("Error:", error)
