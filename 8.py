@@ -1,65 +1,74 @@
-
 import requests
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 URL = "http://localhost:11434/api/generate"
 
-prompts = {
-    "A": "Classify this review:\n{review}",
-    "B": "Classify as Positive, Negative, or Neutral. Return only one label:\n{review}",
-    "C": "Positive means satisfaction, Negative means dissatisfaction, Neutral means neither. Return only one label:\n{review}"
-}
-
-reviews = [
-    ("Amazing phone and excellent camera", "positive"),
-    ("Terrible battery life", "negative"),
-    ("The phone has 128 GB storage", "neutral"),
-    ("I love this phone", "positive"),
-    ("Very poor quality", "negative"),
-    ("The phone comes in black", "neutral")
-]
-
-
 def generate(prompt):
-    response = requests.post(URL, json={
+    r = requests.post(URL, json={
         "model": "llama3.2:1b",
         "prompt": prompt,
         "stream": False,
         "options": {"temperature": 0}
-    })
-    response.raise_for_status()
-    return response.json()["response"].strip().lower()
+    }, timeout=300)
+
+    r.raise_for_status()
+    return r.json()["response"].strip().lower()
 
 
-for name, template in prompts.items():
-    y_true = []
-    y_pred = []
+try:
+    n = int(input("Number of prompts: "))
+    prompts = [input(f"Prompt {i+1}: ") for i in range(n)]
 
-    for review, expected in reviews:
-        answer = generate(template.format(review=review))
+    m = int(input("\nNumber of test inputs: "))
+    data = []
 
-        # Extract the first valid sentiment label
-        prediction = next(
-            (label for label in ["positive", "negative", "neutral"]
-             if label in answer.split()),
-            "invalid"
-        )
+    for i in range(m):
+        text = input("Enter text: ")
+        actual = input("Enter correct category: ").lower()
+        data.append((text, actual))
 
-        y_true.append(expected)
-        y_pred.append(prediction.lower())
+    scores = []
 
-    print(f"\nPrompt {name}")
-    print("=" * 35)
-    print("Accuracy :", round(accuracy_score(y_true, y_pred), 3))
-    print("Precision:", round(precision_score(
-        y_true, y_pred, labels=["positive", "negative", "neutral"],
-        average="macro", zero_division=0
-    ), 3))
-    print("Recall   :", round(recall_score(
-        y_true, y_pred, labels=["positive", "negative", "neutral"],
-        average="macro", zero_division=0
-    ), 3))
-    print("F1 Score :", round(f1_score(
-        y_true, y_pred, labels=["positive", "negative", "neutral"],
-        average="macro", zero_division=0
-    ), 3))
+    for i, prompt in enumerate(prompts):
+        actual, predicted = [], []
+
+        for text, label in data:
+            answer = generate(prompt + "\n" + text)
+
+            prediction = next(
+                (x for x in ["positive", "negative", "neutral"]
+                 if x in answer.split()), "invalid"
+            )
+
+            actual.append(label)
+            predicted.append(prediction)
+
+        a = accuracy_score(actual, predicted)
+        p = precision_score(actual, predicted, average="macro", zero_division=0)
+        r = recall_score(actual, predicted, average="macro", zero_division=0)
+        f = f1_score(actual, predicted, average="macro", zero_division=0)
+
+        scores.append(f)
+
+        print(f"\nPrompt {i+1}")
+        print("=" * 40)
+        print("Accuracy:", round(a, 2))
+        print("Precision:", round(p, 2))
+        print("Recall:", round(r, 2))
+        print("F1-score:", round(f, 2))
+
+    best = scores.index(max(scores))
+
+    print("\nBEST PROMPT")
+    print("=" * 40)
+    print(prompts[best])
+    print("Best F1-score:", round(scores[best], 2))
+
+except requests.exceptions.ConnectionError:
+    print("Error: Could not connect to Ollama. Make sure Ollama is running.")
+
+except requests.exceptions.Timeout:
+    print("Error: Model took too long to respond.")
+
+except Exception as error:
+    print("Error:", error)
